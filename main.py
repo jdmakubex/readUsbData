@@ -3,6 +3,7 @@ import platform
 import pandas as pd
 from datetime import datetime
 import magic
+import mimetypes
 
 def get_file_info(root_dir):
     file_info_list = []
@@ -10,24 +11,32 @@ def get_file_info(root_dir):
         for name in files + dirs:
             file_path = os.path.join(root, name)
             if os.path.exists(file_path):
-                stat = os.stat(file_path)
-                mod_time = datetime.fromtimestamp(stat.st_mtime)
-                
-                # Obtener el tipo de archivo
-                if os.path.isdir(file_path):
-                    file_type = 'Carpeta de archivos'
-                else:
-                    file_type = magic.from_file(file_path, mime=False)
-                
-                file_info = {
-                    'Nombre': name,
-                    'Ruta Completa': file_path,
-                    'Fecha de Modificación': mod_time.date(),
-                    'Hora de Modificación': mod_time.time(),
-                    'Tipo': file_type,
-                    'Tamaño': stat.st_size
-                }
-                file_info_list.append(file_info)
+                try:
+                    stat = os.stat(file_path)
+                    mod_time = datetime.fromtimestamp(stat.st_mtime)
+
+                    # Obtener el tipo de archivo
+                    if os.path.isdir(file_path):
+                        file_type = 'Carpeta de archivos'
+                    else:
+                        try:
+                            mime = magic.Magic(mime=True)
+                            file_type = mime.from_file(file_path)
+                        except magic.MagicException:
+                            mime_type, _ = mimetypes.guess_type(file_path)
+                            file_type = mime_type if mime_type else 'Archivo desconocido'
+
+                    file_info = {
+                        'Nombre': name,
+                        'Ruta Completa': file_path,
+                        'Fecha de Modificación': mod_time.date(),
+                        'Hora de Modificación': mod_time.time(),
+                        'Tipo': file_type,
+                        'Tamaño': stat.st_size
+                    }
+                    file_info_list.append(file_info)
+                except Exception as e:
+                    print(f"Error al procesar el archivo {file_path}: {e}")
     return file_info_list
 
 def save_to_excel(data, output_file):
@@ -37,10 +46,8 @@ def save_to_excel(data, output_file):
 def get_usb_path(label):
     system = platform.system()
     if system == "Windows":
-        # En Windows, las unidades suelen estar en el formato 'D:\\' o similar
         return f'{label}:\\'
     elif system == "Linux":
-        # En Linux, las unidades suelen estar montadas en /media/usuario/etiqueta
         user = os.getenv("USER")
         return f'/media/{user}/{label}'
     else:
